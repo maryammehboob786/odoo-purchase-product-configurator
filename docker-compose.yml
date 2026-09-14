@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16
+    container_name: ohs_odoo19_db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  odoo:
+    image: odoo:19.0
+    container_name: ohs_odoo19
+    depends_on:
+      - db
+    ports:
+      - "8069:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - ./addons:/mnt/extra-addons
+      - ./config/odoo.conf:/etc/odoo/odoo.conf
+    command: odoo --dev=xml
+    restart: unless-stopped
+
+  # Same as `odoo` but with Google Chrome, for the automated tests (incl. browser tours) only:
+  #   docker compose run --rm odoo_test odoo -d ohs_test -u purchase_product_configurator --test-enable --test-tags /purchase_product_configurator --stop-after-init
+  # (in Git Bash prefix the command with MSYS_NO_PATHCONV=1 so "/purchase_..." is not turned into a Windows path)
+  odoo_test:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.test
+    image: ohs/odoo19-test
+    profiles: ["test"]
+    shm_size: "1g"
+    depends_on:
+      - db
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - ./addons:/mnt/extra-addons
+      - ./config/odoo.conf:/etc/odoo/odoo.conf
+
+volumes:
+  db-data:
+  odoo-data:

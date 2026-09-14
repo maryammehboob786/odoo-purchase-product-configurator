@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="purchase_order_form_inherit_product_configurator" model="ir.ui.view">
+        <field name="name">purchase.order.form.inherit.product.configurator</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Keep the variant column available but hidden by default, like on sales orders. -->
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="attributes">
+                <attribute name="string">Product Variant</attribute>
+                <attribute name="optional">hide</attribute>
+                <attribute name="widget">purchase_configurator_product_many2one</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
+                <field name="product_template_id"
+                    string="Product"
+                    widget="purchase_configurator_product_many2one"
+                    readonly="state in ('purchase', 'to approve', 'cancel') or is_downpayment"
+                    required="not display_type and not is_downpayment"
+                    optional="show"
+                    context="{'partner_id': parent.partner_id, 'quantity': product_qty, 'company_id': parent.company_id}"
+                    options="{'show_label_warning': True}"
+                    domain="[('purchase_ok', '=', True), '|', ('company_id', '=', False), ('company_id', 'parent_of', parent.company_id)]"
+                    placeholder="Type to find a product..."/>
+                <!-- Non readonly invisible fields must be declared explicitly: fields added
+                     automatically by the ORM or by widget fieldDependencies are readonly. -->
+                <field name="product_custom_attribute_value_ids" column_invisible="1">
+                    <list>
+                        <field name="custom_product_template_attribute_value_id"/>
+                        <field name="custom_value"/>
+                    </list>
+                </field>
+                <field name="product_no_variant_attribute_value_ids" column_invisible="1"/>
+                <field name="product_template_attribute_value_ids" column_invisible="1"/>
+                <field name="is_configurable_product" column_invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

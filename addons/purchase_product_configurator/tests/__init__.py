@@ -1,0 +1,2 @@
+from . import test_purchase_product_configurator
+from . import test_purchase_product_configurator_ui
