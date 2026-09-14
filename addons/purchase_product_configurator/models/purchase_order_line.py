@@ -99,20 +99,29 @@ class PurchaseOrderLine(models.Model):
     # -------------------------------------------------------------------------
 
     def _get_product_purchase_description(self, product_lang):
-        """Append the custom attribute values (e.g. a free-text customization)
-        to the standard purchase description.
+        """Describe the configuration chosen in the configurator popup.
 
-        The standard description already lists the "no variant" attribute
-        values as ``Attribute: Value``; for a value that carries a custom text
-        that line is replaced by ``Attribute: Value: custom text``.
+        On top of the standard purchase description:
+
+        * every "no variant" attribute value is listed as ``Attribute: Value``
+          (recent Odoo 19 builds already do this, older ones don't);
+        * a value that carries a custom text is listed as
+          ``Attribute: Value: custom text`` instead of the bare line.
         """
         name = super()._get_product_purchase_description(product_lang)
+        no_variant_ptavs = self.with_context(product_lang.env.context)\
+            .product_no_variant_attribute_value_ids
         custom_values = self.product_custom_attribute_value_ids
-        if not custom_values:
+        if not no_variant_ptavs and not custom_values:
             return name
+
         lines = name.split('\n')
-        sorted_custom_ptavs = custom_values.custom_product_template_attribute_value_id.sorted()
-        for ptav in sorted_custom_ptavs:
+        custom_ptavs = custom_values.custom_product_template_attribute_value_id
+        for ptav in no_variant_ptavs:
+            label = f"{ptav.attribute_id.name}: {ptav.name}"
+            if label not in lines and ptav._origin not in custom_ptavs:
+                lines.append(label)
+        for ptav in custom_ptavs.sorted():
             pacv = custom_values.filtered(
                 lambda pcav: pcav.custom_product_template_attribute_value_id == ptav
             )[:1]

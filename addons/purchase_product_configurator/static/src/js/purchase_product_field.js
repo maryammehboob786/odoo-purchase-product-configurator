@@ -335,10 +335,12 @@ export const purchaseOrderLineProductField = {
             readonlyField: dynamicInfo.readonly,
         };
     },
+    // `translated_product_name` is deliberately not declared as a dependency: it does not exist on
+    // purchase order lines in every Odoo 19 build (e.g. Enterprise 19.0-20260105), and the label
+    // getters above fall back to the standard behaviour when it is absent from the record.
     fieldDependencies: [
         { name: "is_configurable_product", type: "boolean" },
         { name: "product_template_attribute_value_ids", type: "many2many" },
-        { name: "translated_product_name", type: "char" },
     ],
 };
 
