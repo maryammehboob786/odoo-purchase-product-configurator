@@ -1,50 +1,123 @@
-# Oxygen Health Systems – Odoo 19 customizations
+# Purchase Product Configurator for Odoo 19
 
-Local Docker stack (Odoo 19 Community + PostgreSQL 16) used to develop and test
-custom modules before deploying them to the production server on Hostinger.
+![Odoo 19](https://img.shields.io/badge/Odoo-19.0-714B67?logo=odoo&logoColor=white)
+![License: LGPL-3](https://img.shields.io/badge/License-LGPL--3-blue.svg)
+![Tests](https://img.shields.io/badge/tests-7%20python%20%2B%201%20browser%20tour-brightgreen)
 
-## Modules
+Odoo's Sales app has a great **product configurator popup**: when a salesperson adds a configurable
+product to a quotation, Odoo asks for the attributes (variants, "no variant" options, custom text
+values) and proposes the product's *optional products*. Purchasing has nothing like it, so buyers who
+order the same configured products from their manufacturer have to type everything by hand.
 
-| Module | Purpose |
+`purchase_product_configurator` brings that popup to **purchase orders**, with purchase-side rules:
+vendor prices instead of pricelist prices, and only products that can actually be purchased.
+
+It was built for [Oxygen Health Systems](https://oxygenhealthsystems.com), which sells hyperbaric
+chambers with a "chamber customisation" attribute and a catalogue of upgrades sold as optional
+products. Every chamber bought from the manufacturer now goes through the same popup as the
+customer's order.
+
+![The configurator popup on a purchase order line](docs/purchase_configurator_popup.png)
+
+## Features
+
+- Opens the configurator when a product with configurable attributes or optional products is added
+  to a purchase order line, exactly like on a sales order line.
+- Attributes: variant-creating, dynamic and "no variant" attributes, custom text values, exclusions
+  and archived combinations, units of measure / packaging.
+- Optional products, including optional products that have their own attributes, added as extra
+  lines right after the main product.
+- **Vendor prices**: the popup shows the price of the order's vendor (vendor pricelist, quantity and
+  date aware), falling back to the product cost. Sales-only "extra price" badges are hidden.
+- Only optional products flagged *Can be Purchased* are proposed.
+- The chosen configuration is written into the line description, so it appears on the printed
+  RFQ / purchase order sent to the vendor.
+- A pencil button next to a configurable line re-opens the popup to edit the configuration.
+- Works on Odoo 19 Community and Enterprise. Depends only on the standard `purchase` and `sale` apps.
+
+## How it works
+
+The module reuses the Sales configurator components instead of copying them, so it stays small and
+follows Odoo upgrades.
+
+```mermaid
+flowchart LR
+    A[Purchase order line<br/>product column] -->|product picked| B[PurchaseOrderLineProductField<br/>OWL field widget]
+    B -->|configurable or has optional products| C[PurchaseProductConfiguratorDialog<br/>extends sale's ProductConfiguratorDialog]
+    C <-->|JSON-RPC| D[/purchase/product_configurator/*<br/>controller: vendor prices, purchasable optional products/]
+    C -->|Confirm| E[Lines updated:<br/>product, qty, no-variant values, custom values]
+```
+
+| Layer | What the module adds |
 | --- | --- |
-| `addons/purchase_product_configurator` | Shows the Sales *product configurator* popup (chamber customization + optional products) on purchase order lines. |
+| `models/purchase_order_line.py` | `product_template_id` (editable, like on sale lines), `is_configurable_product`, `product_custom_attribute_value_ids`; self-cleaning no-variant values; description that includes custom values. |
+| `models/product_attribute_custom_value.py` | Link from custom attribute values to purchase order lines. |
+| `models/product_template.py` | `get_single_product_variant_for_purchase()`: decides whether the popup must open, counting only purchasable optional products. |
+| `controllers/product_configurator.py` | Purchase counterpart of the sale configurator controller. Standalone on purpose: subclassing an Odoo controller would change the Sales routes too. |
+| `static/src/js/purchase_product_field.js` | The product column widget (`purchase_configurator_product_many2one`). Applies the product first and the configuration second, because the purchase onchange resets quantity and price. |
+| `static/src/js/purchase_product_configurator_dialog.js` | Sale dialog subclass pointing at the purchase routes and passing the vendor. |
+| `views/purchase_order_views.xml` | Product column on PO lines switched to the template field with the widget; hidden technical columns. |
 
-## Local stack
+## Repository layout
+
+```
+addons/purchase_product_configurator/   the installable Odoo module
+docker-compose.yml, config/, docker/    local Odoo 19 Community + PostgreSQL 16 stack for development and tests
+scripts/setup_demo_data.py              seeds a hyperbaric-chamber test setup (vendor, attributes, upgrades, prices)
+docs/                                   screenshots
+```
+
+## Local development
+
+Requirements: Docker Desktop, Python 3 (for the seed script).
 
 ```bash
-# start database + Odoo (http://localhost:8069, master password "admin")
+# start PostgreSQL + Odoo on http://localhost:8069 (master password "admin")
 docker compose up -d
 
 # first time only: create the test database with demo data and the module
 docker compose run --rm odoo odoo -d ohs_test -i base,purchase,sale_management,stock,purchase_product_configurator --with-demo --stop-after-init
 
-# seed a realistic hyperbaric chamber setup (vendor, attributes, optional products, vendor prices)
+# seed a realistic chamber setup, then log in with admin / admin
 python scripts/setup_demo_data.py --db ohs_test
 
-# after changing Python/XML in the module
-docker compose run --rm odoo odoo -d ohs_test -u purchase_product_configurator --stop-after-init
-docker compose restart odoo
+# after changing Python or XML
+docker compose run --rm odoo odoo -d ohs_test -u purchase_product_configurator --stop-after-init && docker compose restart odoo
+```
 
-# run the module's automated tests (Python + browser tour; the odoo_test image bundles Google Chrome)
-# In Git Bash, prefix with MSYS_NO_PATHCONV=1 so "/purchase_product_configurator" is not rewritten as a Windows path.
+### Tests
+
+Seven Python tests (pricing, optional products, descriptions, cleanup) and one browser tour that
+drives the real purchase order form in Chrome. The `odoo_test` service is the official image plus
+Google Chrome.
+
+```bash
 docker compose run --rm odoo_test odoo -d ohs_test -u purchase_product_configurator --test-enable --test-tags /purchase_product_configurator --stop-after-init
 ```
 
-Login: `admin` / `admin`.
+In Git Bash on Windows, prefix the command with `MSYS_NO_PATHCONV=1` so the `/purchase_...` tag is
+not rewritten as a Windows path.
 
-## Deploying `purchase_product_configurator` to production
+## Installing on a production server
 
-The module depends on the standard `purchase` and `sale` apps only (Community
-and Enterprise are both fine).
+1. Back up the database.
+2. Copy `addons/purchase_product_configurator` into a folder listed in `addons_path`
+   (`/etc/odoo/odoo.conf`), or clone this repository and add its `addons` folder to `addons_path`.
+3. Restart Odoo, e.g. `sudo systemctl restart odoo`.
+4. Enable developer mode, open *Apps → Update Apps List*, search **Purchase Product Configurator**,
+   click *Install*.
+5. Make sure the optional products have *Can be Purchased* ticked and that the vendor has prices on
+   the products' *Purchase* tab, otherwise the popup shows the product cost (or 0).
 
-1. Copy the folder `addons/purchase_product_configurator` to a directory that is
-   in the server's `addons_path` (check `/etc/odoo/odoo.conf`, key `addons_path`;
-   a dedicated folder such as `/opt/odoo/custom-addons` is recommended).
-2. Restart the Odoo service (`sudo systemctl restart odoo`).
-3. In Odoo, enable developer mode, go to *Apps → Update Apps List*, then search
-   for **Purchase Product Configurator** and click *Install*.
-4. Make sure the optional products (the chamber upgrades) have *Can be
-   Purchased* ticked on their product form, otherwise the popup does not propose
-   them on purchase orders.
+Not compatible with Odoo's *Purchase Matrix* module (`purchase_product_matrix`): both replace the
+product column on purchase order lines.
 
-Always take a database backup before installing on production.
+## Roadmap
+
+- Serial-number traceability: copy the upgrades and customisation chosen on the order onto the
+  serial number assigned at receipt, so opening a serial shows what was included with that unit.
+- Carton checklist on receipts for products delivered as several cartons but tracked as one serial.
+
+## License
+
+[LGPL-3](LICENSE). Built by Maryam Mehboob for Oxygen Health Systems, LLC.
