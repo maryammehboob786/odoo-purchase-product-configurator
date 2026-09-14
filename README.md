@@ -100,9 +100,13 @@ not rewritten as a Windows path.
 
 ## Installing on a production server
 
+```bash
+git clone https://github.com/maryammehboob786/odoo-purchase-product-configurator.git /opt/odoo/odoo-purchase-product-configurator
+```
+
 1. Back up the database.
 2. Copy `addons/purchase_product_configurator` into a folder listed in `addons_path`
-   (`/etc/odoo/odoo.conf`), or clone this repository and add its `addons` folder to `addons_path`.
+   (`/etc/odoo/odoo.conf`), or add the cloned repository's `addons` folder to `addons_path`.
 3. Restart Odoo, e.g. `sudo systemctl restart odoo`.
 4. Enable developer mode, open *Apps → Update Apps List*, search **Purchase Product Configurator**,
    click *Install*.
