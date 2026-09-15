@@ -1,17 +1,17 @@
-"""Seed the local Odoo 19 test database with a hyperbaric-chamber setup.
+"""Seed a neutral office-furniture example into a local Odoo 19 database.
 
-Creates (idempotently, matched by name):
-  * a vendor "Chamber Manufacturer Co.",
-  * a "Hyperbaric Chamber" product with
-      - a variant attribute  "Chamber Size"           (32 inch / 40 inch),
-      - a no-variant attribute "Chamber Customization" (Standard / Extra Viewing
-        Window / Wheelchair Door / Custom Color with free text),
-      - optional products: "20 Lpm Oxygen Concentrator", "3D Contour Memory Foam
-        Mattress", "Chamber Frame Upgrade" and a non-purchasable "Installation
-        Service" (must NOT be proposed on purchase orders),
-  * vendor prices for the vendor.
+Creates (idempotently, matched by name), reusing images of the standard Odoo demo products:
+  * a vendor "Nordic Office Supply Co.",
+  * a configurable "Executive Standing Desk" with
+      - variant attributes "Desk Width" (140/160/180 cm) and "Finish" (Oak/Walnut/White + custom text),
+      - a no-variant attribute "Cable Management" (None/Grommets/Full Cable Tray),
+      - optional products: Ergonomic Office Chair (with a Chair Colour attribute), Dual Monitor Arm,
+        Under-Desk Cable Tray, LED Desk Lamp, Chair Floor Mat, and a non-purchasable "On-site Assembly"
+        service (must NOT be proposed on purchase orders),
+  * vendor prices for everything (per width for the desk).
 
 Usage:  python scripts/setup_demo_data.py [--url http://localhost:8069] [--db ohs_test]
+Requires a database created with demo data (--with-demo) for the product images.
 """
 
 import argparse
@@ -42,17 +42,21 @@ def main():
             return ids[0]
         return call(model, 'create', [values])[0]
 
-    vendor_id = get_or_create('res.partner', [('name', '=', "Chamber Manufacturer Co.")], {
-        'name': "Chamber Manufacturer Co.",
+    def image_of(demo_product_name):
+        rec = call('product.template', 'search_read', [('name', '=', demo_product_name)],
+                   fields=['image_1920'], limit=1)
+        return rec[0]['image_1920'] if rec else False
+
+    vendor_id = get_or_create('res.partner', [('name', '=', "Nordic Office Supply Co.")], {
+        'name': "Nordic Office Supply Co.",
         'is_company': True,
+        'supplier_rank': 1,
     })
 
     # ---- attributes ---------------------------------------------------------
     def attribute(name, create_variant, display_type, values):
         attr_id = get_or_create('product.attribute', [('name', '=', name)], {
-            'name': name,
-            'create_variant': create_variant,
-            'display_type': display_type,
+            'name': name, 'create_variant': create_variant, 'display_type': display_type,
         })
         value_ids = []
         for value_name, is_custom in values:
@@ -63,88 +67,72 @@ def main():
             ))
         return attr_id, value_ids
 
-    size_attr, size_values = attribute(
-        "Chamber Size", 'always', 'radio', [("32 inch", False), ("40 inch", False)]
-    )
-    custom_attr, custom_values = attribute(
-        "Chamber Customization", 'no_variant', 'radio', [
-            ("Standard", False),
-            ("Extra Viewing Window", False),
-            ("Wheelchair Door", False),
-            ("Custom Color", True),
-        ],
-    )
+    width_attr, width_values = attribute("Desk Width", 'always', 'pills',
+                                         [("140 cm", False), ("160 cm", False), ("180 cm", False)])
+    finish_attr, finish_values = attribute("Finish", 'always', 'radio',
+                                           [("Natural Oak", False), ("Walnut", False), ("White", False),
+                                            ("Custom Finish", True)])
+    cable_attr, cable_values = attribute("Cable Management", 'no_variant', 'radio',
+                                         [("None", False), ("Grommets", False), ("Full Cable Tray", False)])
+    colour_attr, colour_values = attribute("Chair Colour", 'always', 'radio',
+                                           [("Black", False), ("Grey", False)])
 
-    # ---- optional products --------------------------------------------------
-    def product(name, purchase_ok=True, sale_ok=True, cost=0.0, price=0.0, extra=None):
+    # ---- products -----------------------------------------------------------
+    def product(name, cost, price, image=False, extra=None):
         values = {
-            'name': name,
-            'purchase_ok': purchase_ok,
-            'sale_ok': sale_ok,
-            'standard_price': cost,
-            'list_price': price,
-            'type': 'consu',
+            'name': name, 'type': 'consu', 'purchase_ok': True, 'sale_ok': True,
+            'standard_price': cost, 'list_price': price,
         }
+        if image:
+            values['image_1920'] = image
         values.update(extra or {})
         return get_or_create('product.template', [('name', '=', name)], values)
 
-    concentrator = product("20 Lpm Oxygen Concentrator", cost=1500, price=5000,
-                           extra={'description_purchase': "110-120 V, 1920 W"})
-    mattress = product("3D Contour Memory Foam Mattress", cost=120, price=300)
-    frame = product("Chamber Frame Upgrade", cost=400, price=900)
-    installation = product("Installation Service", purchase_ok=False, price=500,
-                           extra={'type': 'service'})
+    def ensure_attribute_lines(tmpl_id, lines):
+        existing = call('product.template.attribute.line', 'search', [('product_tmpl_id', '=', tmpl_id)])
+        if not existing:
+            call('product.template', 'write', [tmpl_id], {
+                'attribute_line_ids': [(0, 0, {'attribute_id': a, 'value_ids': [(6, 0, v)]}) for a, v in lines],
+            })
 
-    # ---- main product -------------------------------------------------------
-    chamber = get_or_create('product.template', [('name', '=', "Hyperbaric Chamber")], {
-        'name': "Hyperbaric Chamber",
-        'purchase_ok': True,
-        'sale_ok': True,
-        'type': 'consu',
-        'standard_price': 3000,
-        'list_price': 6000,
-        'description_purchase': "Soft-shell hyperbaric chamber, 1.3 ATA",
-        'optional_product_ids': [(6, 0, [concentrator, mattress, frame, installation])],
+    chair = product("Ergonomic Office Chair", 150, 349, image_of("Office Chair Black"),
+                    {'description_purchase': "Mesh back, adjustable lumbar support"})
+    ensure_attribute_lines(chair, [(colour_attr, colour_values)])
+    arm = product("Dual Monitor Arm", 45, 119, image_of("Monitor Stand"))
+    tray = product("Under-Desk Cable Tray", 20, 59, image_of("Cable Management Box"))
+    lamp = product("LED Desk Lamp", 26, 69, image_of("Office Lamp"))
+    mat = product("Chair Floor Mat", 8, 24, image_of("Chair floor protection"))
+    assembly = product("On-site Assembly", 0, 90, extra={'type': 'service', 'purchase_ok': False})
+
+    desk = product("Executive Standing Desk", 420, 899, image_of("Customizable Desk"), {
+        'description_purchase': "Electric height-adjustable frame, 120 kg load, EU plug",
+        'optional_product_ids': [(6, 0, [chair, arm, tray, lamp, mat, assembly])],
     })
-    existing_lines = call('product.template.attribute.line', 'search',
-                          [('product_tmpl_id', '=', chamber)])
-    if not existing_lines:
-        call('product.template', 'write', [chamber], {
-            'attribute_line_ids': [
-                (0, 0, {'attribute_id': size_attr, 'value_ids': [(6, 0, size_values)]}),
-                (0, 0, {'attribute_id': custom_attr, 'value_ids': [(6, 0, custom_values)]}),
-            ],
-        })
-
-    variants = call('product.product', 'search_read', [('product_tmpl_id', '=', chamber)],
-                    fields=['id', 'display_name'])
-    # The cost is stored per variant for multi-variant products.
-    call('product.product', 'write', [v['id'] for v in variants], {'standard_price': 3000.0})
-    prices = {"32 inch": 4000.0, "40 inch": 5500.0}
+    ensure_attribute_lines(desk, [(width_attr, width_values), (finish_attr, finish_values),
+                                  (cable_attr, cable_values)])
 
     # ---- vendor prices ------------------------------------------------------
     def supplierinfo(tmpl_id, price, product_id=False):
         domain = [('partner_id', '=', vendor_id), ('product_tmpl_id', '=', tmpl_id),
                   ('product_id', '=', product_id)]
         get_or_create('product.supplierinfo', domain, {
-            'partner_id': vendor_id,
-            'product_tmpl_id': tmpl_id,
-            'product_id': product_id,
-            'price': price,
-            'min_qty': 1,
+            'partner_id': vendor_id, 'product_tmpl_id': tmpl_id, 'product_id': product_id,
+            'price': price, 'min_qty': 1,
         })
 
+    width_prices = {"140 cm": 480.0, "160 cm": 520.0, "180 cm": 560.0}
+    variants = call('product.product', 'search_read', [('product_tmpl_id', '=', desk)],
+                    fields=['id', 'display_name'])
+    call('product.product', 'write', [v['id'] for v in variants], {'standard_price': 420.0})
     for variant in variants:
-        for size, price in prices.items():
-            if size in variant['display_name']:
-                supplierinfo(chamber, price, variant['id'])
-    supplierinfo(concentrator, 1800.0)
-    supplierinfo(mattress, 150.0)
-    supplierinfo(frame, 450.0)
+        for width, price in width_prices.items():
+            if width in variant['display_name']:
+                supplierinfo(desk, price, variant['id'])
+    for tmpl_id, price in ((chair, 180.0), (arm, 52.0), (tray, 24.0), (lamp, 30.0), (mat, 9.0)):
+        supplierinfo(tmpl_id, price)
 
     print("Vendor id:", vendor_id)
-    print("Hyperbaric Chamber template id:", chamber)
-    print("Variants:", [v['display_name'] for v in variants])
+    print("Executive Standing Desk template id:", desk, "with", len(variants), "variants")
     print("Done.")
 
 

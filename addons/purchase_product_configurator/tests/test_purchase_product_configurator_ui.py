@@ -1,4 +1,4 @@
-# Part of the Oxygen Health Systems Odoo customizations.
+# Part of purchase_product_configurator. See LICENSE file for full copyright and licensing details.
 
 from odoo.tests import tagged
 
@@ -18,15 +18,15 @@ class TestPurchaseProductConfiguratorUi(TestPurchaseProductConfiguratorCommon):
         )
         self.assertTrue(order, "The tour must have created a purchase order")
         self.assertEqual(len(order.order_line), 2)
-        chamber_line, concentrator_line = order.order_line.sorted('sequence')
+        desk_line, arm_line = order.order_line.sorted('sequence')
 
-        self.assertEqual(chamber_line.product_id, self.chamber_40)
-        self.assertEqual(chamber_line.product_qty, 2)
-        self.assertEqual(chamber_line.price_unit, 5500.0)
-        self.assertEqual(chamber_line.product_no_variant_attribute_value_ids, self.ptav_custom)
-        self.assertEqual(chamber_line.product_custom_attribute_value_ids.custom_value, "Blue paint")
-        self.assertIn("Chamber Customization: Custom: Blue paint", chamber_line.name)
+        self.assertEqual(desk_line.product_id, self.desk_160)
+        self.assertEqual(desk_line.product_qty, 2)
+        self.assertEqual(desk_line.price_unit, 5500.0)
+        self.assertEqual(desk_line.product_no_variant_attribute_value_ids, self.ptav_custom)
+        self.assertEqual(desk_line.product_custom_attribute_value_ids.custom_value, "Pastel blue")
+        self.assertIn("Finish: Custom: Pastel blue", desk_line.name)
 
-        self.assertEqual(concentrator_line.product_id, self.concentrator.product_variant_id)
-        self.assertEqual(concentrator_line.product_qty, 1)
-        self.assertEqual(concentrator_line.price_unit, 1000.0)
+        self.assertEqual(arm_line.product_id, self.monitor_arm.product_variant_id)
+        self.assertEqual(arm_line.product_qty, 1)
+        self.assertEqual(arm_line.price_unit, 1000.0)

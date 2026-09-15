@@ -1,4 +1,4 @@
-# Part of the Oxygen Health Systems Odoo customizations.
+# Part of purchase_product_configurator. See LICENSE file for full copyright and licensing details.
 
 from . import controllers
 from . import models

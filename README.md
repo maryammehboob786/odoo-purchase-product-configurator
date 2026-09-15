@@ -12,12 +12,18 @@ order the same configured products from their manufacturer have to type everythi
 `purchase_product_configurator` brings that popup to **purchase orders**, with purchase-side rules:
 vendor prices instead of pricelist prices, and only products that can actually be purchased.
 
-It was built for [Oxygen Health Systems](https://oxygenhealthsystems.com), which sells hyperbaric
-chambers with a "chamber customisation" attribute and a catalogue of upgrades sold as optional
-products. Every chamber bought from the manufacturer now goes through the same popup as the
-customer's order.
+It was built for a company whose main products are configurable (sizes, finishes, free-text
+customisation) and sold with a catalogue of add-ons as optional products. Every unit bought from
+the manufacturer now goes through the same popup as the customer's order, so nothing gets lost
+between the quotation and the purchase order.
 
 ![The configurator popup on a purchase order line](docs/purchase_configurator_popup.png)
+
+*Example above: a configurable standing desk with vendor prices, a custom finish and add-ons
+(demo data from `scripts/setup_demo_data.py`). After confirming, the order lines carry the full
+configuration:*
+
+![The resulting purchase order lines](docs/purchase_order_lines.png)
 
 ## Features
 
@@ -63,7 +69,7 @@ flowchart LR
 ```
 addons/purchase_product_configurator/   the installable Odoo module
 docker-compose.yml, config/, docker/    local Odoo 19 Community + PostgreSQL 16 stack for development and tests
-scripts/setup_demo_data.py              seeds a hyperbaric-chamber test setup (vendor, attributes, upgrades, prices)
+scripts/setup_demo_data.py              seeds a configurable-desk example (vendor, attributes, add-ons, vendor prices)
 docs/                                   screenshots
 ```
 
@@ -78,7 +84,7 @@ docker compose up -d
 # first time only: create the test database with demo data and the module
 docker compose run --rm odoo odoo -d ohs_test -i base,purchase,sale_management,stock,purchase_product_configurator --with-demo --stop-after-init
 
-# seed a realistic chamber setup, then log in with admin / admin
+# seed the configurable-desk example, then log in with admin / admin
 python scripts/setup_demo_data.py --db ohs_test
 
 # after changing Python or XML
@@ -118,10 +124,10 @@ product column on purchase order lines.
 
 ## Roadmap
 
-- Serial-number traceability: copy the upgrades and customisation chosen on the order onto the
+- Serial-number traceability: copy the add-ons and customisation chosen on the order onto the
   serial number assigned at receipt, so opening a serial shows what was included with that unit.
-- Carton checklist on receipts for products delivered as several cartons but tracked as one serial.
+- Vendor portal: let vendors quote prices on RFQs and report shipping details and status.
 
 ## License
 
-[LGPL-3](LICENSE). Built by Maryam Mehboob for Oxygen Health Systems, LLC.
+[LGPL-3](LICENSE). Built by Maryam Mehboob.

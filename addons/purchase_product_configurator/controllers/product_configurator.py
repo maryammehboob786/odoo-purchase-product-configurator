@@ -1,4 +1,4 @@
-# Part of the Oxygen Health Systems Odoo customizations.
+# Part of purchase_product_configurator. See LICENSE file for full copyright and licensing details.
 #
 # Purchase counterpart of odoo/addons/sale/controllers/product_configurator.py.
 # It is a standalone controller (not a subclass of the sale one) on purpose:
